@@ -45,10 +45,21 @@ def read(path):
 def bullets(text):
     lines = [l.rstrip() for l in text.splitlines()]
     out = [BULLET.sub("", l).strip() for l in lines if BULLET.match(l)]
-    if len(out) < 3:  # PDF exports often drop bullet glyphs: fall back to sentence-like lines
-        out = [l.strip() for l in lines if len(l.split()) >= 7
-               and re.match(r"^[A-Z][a-z]+\b", l.strip())
-               and not re.search(r"\b(19|20)\d{2}\b|\||·|@", l)]  # skip title/date/contact lines
+    if len(out) >= 3:
+        return out
+    # PDF exports often drop bullet glyphs and wrap long bullets over several lines.
+    # Rebuild bullets: start at a capitalised line, keep joining until a line ends with a full stop.
+    out, cur = [], ""
+    for l in (x.strip() for x in lines):
+        if not l or re.search(r"\b(19|20)\d{2}\b|\||@", l):
+            cur = ""; continue
+        if not cur and not re.match(r"^[A-Z][a-z]+\b", l):
+            continue
+        cur = (cur + " " + l).strip()
+        if cur.endswith("."):
+            if len(cur.split()) >= 6:
+                out.append(cur)
+            cur = ""
     return out
 
 def words(t):
@@ -109,6 +120,7 @@ def main():
     if res["first_person"]: flags.append(f"{res['first_person']} first-person words (I/me/my) in a resume")
     if res["resulting_in_shape"] >= 3: flags.append(f"'..., resulting in' shape used {res['resulting_in_shape']}x: vary it")
     if a.jd and res["jd_sentences_copied"]: flags.append(f"{res['jd_sentences_copied']} 8-word runs copied from the JD: mirror keywords, never sentences")
+    if pages is not None: flags.append("PDF: bullet counts and lengths are rebuilt from wrapped lines, so treat them as approximate; a .txt export is exact")
     if pages is None: flags.append("not a PDF: page count and metadata not checked; export to PDF and re-run")
     res["flags"] = flags
     if a.json:
